@@ -69,6 +69,10 @@ jobs:
             --platform=managed \
             --allow-unauthenticated \
             --port=8080 \
+            --cpu=1 \
+            --memory=512Mi \
+            --timeout=300 \
+            --cpu-boost \
             --add-cloudsql-instances="${{ env.CLOUDSQL_INSTANCE }}" \
             --set-secrets="DATABASE_URL=mrn-database-url:latest,SESSION_SECRET=mrn-session-secret:latest,OPENAI_API_KEY=mrn-openai-api-key:latest" \
             --set-env-vars="NODE_ENV=production,COOKIE_SECURE=true,FRONTEND_DIST=/app/frontend/dist" \
