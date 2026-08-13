@@ -1,0 +1,88 @@
+name: Deploy to Cloud Run
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+env:
+  PROJECT_ID: project-7520bbcf-824d-491f-804
+  REGION: us-central1
+  SERVICE: mrn
+  REPOSITORY: mrn
+  IMAGE: mrn
+  CLOUDSQL_INSTANCE: project-7520bbcf-824d-491f-804:us-central1:mrn-postgres
+  WORKLOAD_IDENTITY_PROVIDER: projects/88339889733/locations/global/workloadIdentityPools/github/providers/github
+  SERVICE_ACCOUNT: mrn-github-deploy@project-7520bbcf-824d-491f-804.iam.gserviceaccount.com
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.SERVICE_ACCOUNT }}
+          token_format: access_token
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+
+      - name: Authenticate Docker to Artifact Registry
+        run: |
+          gcloud auth configure-docker "${{ env.REGION }}-docker.pkg.dev" --quiet
+
+      - name: Build container image
+        run: |
+          IMAGE_URI="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE }}"
+          docker build \
+            -t "${IMAGE_URI}:${{ github.sha }}" \
+            -t "${IMAGE_URI}:latest" \
+            .
+
+      - name: Push image to Artifact Registry
+        run: |
+          IMAGE_URI="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE }}"
+          docker push "${IMAGE_URI}:${{ github.sha }}"
+          docker push "${IMAGE_URI}:latest"
+
+      - name: Deploy to Cloud Run
+        run: |
+          IMAGE_URI="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE }}:${{ github.sha }}"
+
+          gcloud run deploy "${{ env.SERVICE }}" \
+            --image="${IMAGE_URI}" \
+            --region="${{ env.REGION }}" \
+            --project="${{ env.PROJECT_ID }}" \
+            --platform=managed \
+            --allow-unauthenticated \
+            --port=8080 \
+            --add-cloudsql-instances="${{ env.CLOUDSQL_INSTANCE }}" \
+            --set-secrets="DATABASE_URL=mrn-database-url:latest,SESSION_SECRET=mrn-session-secret:latest,OPENAI_API_KEY=mrn-openai-api-key:latest" \
+            --set-env-vars="NODE_ENV=production,COOKIE_SECURE=true,FRONTEND_DIST=/app/frontend/dist" \
+            --quiet
+
+      - name: Set CORS_ORIGIN to Cloud Run URL
+        run: |
+          SERVICE_URL="$(gcloud run services describe "${{ env.SERVICE }}" \
+            --region="${{ env.REGION }}" \
+            --project="${{ env.PROJECT_ID }}" \
+            --format='value(status.url)')"
+          gcloud run services update "${{ env.SERVICE }}" \
+            --region="${{ env.REGION }}" \
+            --project="${{ env.PROJECT_ID }}" \
+            --update-env-vars="CORS_ORIGIN=${SERVICE_URL}" \
+            --quiet
+          echo "Deployed: ${SERVICE_URL}"

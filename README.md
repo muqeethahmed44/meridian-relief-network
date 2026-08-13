@@ -161,6 +161,25 @@ Sample needs cover Texas, Louisiana, Mississippi, Alabama, and Florida, with cat
 - Post a need — state + catalog skills  
 - Matches & apps — approve/reject, approved placements, suggested rankings  
 
+### Cloud Run (GitHub Actions)
+
+Push to `master` / `main` runs [`.github/workflows/deploy-cloud-run.yml`](.github/workflows/deploy-cloud-run.yml):
+
+1. Authenticates with Workload Identity Federation (`mrn-github-deploy`)
+2. Builds the multi-stage Docker image and pushes to Artifact Registry (`us-central1-docker.pkg.dev/.../mrn/mrn`)
+3. Deploys Cloud Run service `mrn` with Cloud SQL (`mrn-postgres`) and Secret Manager secrets
+
+| Secret Manager secret | Env var |
+| --- | --- |
+| `mrn-database-url` | `DATABASE_URL` |
+| `mrn-session-secret` | `SESSION_SECRET` |
+| `mrn-openai-api-key` | `OPENAI_API_KEY` |
+
+WIF (no JSON keys):
+
+- Provider: `projects/88339889733/locations/global/workloadIdentityPools/github/providers/github`
+- Service account: `mrn-github-deploy@project-7520bbcf-824d-491f-804.iam.gserviceaccount.com`
+
 ### Useful commands
 
 ```bash
