@@ -1,0 +1,20 @@
+# Dependencies & build output
+node_modules/
+dist/
+build/
+.vite/
+coverage/
+*.tsbuildinfo
+
+# Secrets — never commit real credentials
+.env
+.env.local
+.env.*.local
+backend/.env
+frontend/.env
+frontend/.env.local
+
+# Logs & OS junk
+*.log
+.DS_Store
+Thumbs.db
