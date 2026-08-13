@@ -22,11 +22,15 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PgSession = connectPgSimple(session);
 
-/** Built Vite assets — Docker sets FRONTEND_DIST=/app/frontend/dist */
+/**
+ * Built Vite assets — served only in production so local `npm run dev`
+ * always uses Vite (:5173) instead of a stale frontend/dist build.
+ * Cloud Run / Docker set NODE_ENV=production and FRONTEND_DIST.
+ */
 const frontendDist =
   env.frontendDist || path.resolve(__dirname, '../../frontend/dist');
 const spaIndex = path.join(frontendDist, 'index.html');
-const serveSpa = fs.existsSync(spaIndex);
+const serveSpa = env.nodeEnv === 'production' && fs.existsSync(spaIndex);
 
 if (!env.sessionSecret) {
   throw new Error('SESSION_SECRET is missing. Copy .env.example to .env at the project root.');
@@ -43,6 +47,10 @@ app.use(
   })
 );
 app.use(express.json());
+app.use((_req, res, next) => {
+  res.charset = 'utf-8';
+  next();
+});
 app.use(
   session({
     name: 'mrn.sid',
