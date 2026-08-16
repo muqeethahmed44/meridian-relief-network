@@ -39,10 +39,41 @@ if (!env.sessionSecret) {
 await ensureSchema();
 
 app.disable('x-powered-by');
+// Cloud Run terminates TLS and forwards HTTP; required for secure session cookies.
+app.set('trust proxy', 1);
+
+function isAllowedCorsOrigin(origin) {
+  if (!origin) return true;
+
+  const configured = [env.corsOrigin, process.env.ADDITIONAL_CORS_ORIGINS]
+    .filter(Boolean)
+    .flatMap((value) => String(value).split(','))
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  if (configured.includes(origin) || configured.includes('*')) {
+    return true;
+  }
+
+  // Cloud Run exposes multiple URL shapes for the same service.
+  // Accept this app's hosts so login cookies/CORS work on either.
+  if (env.nodeEnv === 'production') {
+    try {
+      const { hostname } = new URL(origin);
+      if (/^mrn-.+\.run\.app$/i.test(hostname)) return true;
+    } catch {
+      return false;
+    }
+  }
+
+  return false;
+}
 
 app.use(
   cors({
-    origin: env.corsOrigin,
+    origin(origin, callback) {
+      callback(null, isAllowedCorsOrigin(origin));
+    },
     credentials: true,
   })
 );
